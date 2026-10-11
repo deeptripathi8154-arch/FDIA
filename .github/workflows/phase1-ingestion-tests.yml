@@ -16,6 +16,6 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install Phase 1 test dependencies
-        run: python -m pip install --upgrade pip pytest openpyxl pypdf
+        run: python -m pip install --upgrade pip pytest pytest-cov openpyxl pypdf
       - name: Run ingestion tests
         run: python -m pytest tests/unit/test_ingestion_phase1.py -q
