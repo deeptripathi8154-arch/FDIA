@@ -22,7 +22,7 @@ def test_pasted_text_preserves_content_and_hash():
 
 
 def test_csv_rows_parse():
-    raw = b"customer,imei,amount\\nTest User,123456789012345,1200.00\\n"
+    raw = b"customer,imei,amount\nTest User,123456789012345,1200.00\n"
     doc = ingest_bytes("sales.csv", raw)
     assert doc.source_type == "csv"
     assert doc.rows[0]["customer"] == "Test User"
