@@ -37,6 +37,7 @@ dependencies = [
     
     # Excel
     "openpyxl>=3.11.0",
+    "pypdf>=4.0.0",
     "pandas>=2.1.0",
     
     # Utilities
