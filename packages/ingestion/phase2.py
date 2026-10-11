@@ -108,7 +108,7 @@ def ingest_phase2_bytes(name: str, data: bytes) -> IngestedDocument:
             )
         return IngestedDocument(
             safe_name, "image_ocr", digest, text=text, warnings=warnings,
-            # Keep OCR confidence as metadata without changing the Phase 1 dataclass contract.
+            confidence=average_confidence,
         )
 
     raise IngestionError(
