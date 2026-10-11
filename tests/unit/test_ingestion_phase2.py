@@ -40,6 +40,7 @@ def test_image_requires_real_ocr_runtime_or_extracts_text(monkeypatch):
 
     class FakeTesseract:
         Output = FakeOutput
+        TesseractNotFoundError = Exception
 
         @staticmethod
         def image_to_data(image, output_type, config):
@@ -49,6 +50,7 @@ def test_image_requires_real_ocr_runtime_or_extracts_text(monkeypatch):
     result = ingest_phase2_bytes("scan.png", buffer.getvalue())
     assert result.source_type == "image_ocr"
     assert result.text == "Invoice 123"
+    assert abs(result.confidence - 0.875) < 0.0001
 
 
 def test_unified_ingestion_routes_phase1_formats():
