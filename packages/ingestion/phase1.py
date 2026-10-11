@@ -81,7 +81,7 @@ def ingest_bytes(name: str, data: bytes, *, pasted_text: bool = False) -> Ingest
             decoded = _decode_text(data)
             sample = decoded[:8192]
             try:
-                dialect = csv.Sniffer().sniff(sample, delimiters=",;\\t|")
+                dialect = csv.Sniffer().sniff(sample, delimiters=",;\t|")
             except csv.Error:
                 dialect = csv.excel
             reader = csv.DictReader(io.StringIO(decoded), dialect=dialect)
@@ -169,13 +169,13 @@ def validate_record(record: dict[str, Any], *, required_fields: tuple[str, ...] 
     for key in ("imei", "imei1", "imei2"):
         value = record.get(key)
         if value is not None and str(value).strip():
-            digits = re.sub(r"\\s+", "", str(value))
+            digits = re.sub(r"\s+", "", str(value))
             if not digits.isdigit() or len(digits) != 15:
                 errors.append(f"{key} must contain exactly 15 digits.")
 
     phone = record.get("phone") or record.get("mobile")
     if phone is not None and str(phone).strip():
-        digits = re.sub(r"\\D", "", str(phone))
+        digits = re.sub(r"\D", "", str(phone))
         if len(digits) not in (10, 11, 12, 13, 14, 15):
             errors.append("Phone/mobile number must contain 10–15 digits after removing formatting.")
 
