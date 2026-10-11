@@ -1,5 +1,14 @@
 # MARG ERP and Universal Automation Agent
 
+
+## Current implementation status
+
+- Phase 1: deterministic intake for pasted text, TXT/MD/LOG, CSV, XLSX/XLSM, and text-based PDF; validation and dry-run preview only.
+- Phase 2: DOCX paragraph/table extraction and image OCR through Pillow + pytesseract/Tesseract. OCR output carries an average confidence score and a warning below 80%; uncertain values require human review.
+- OCR prerequisite: install the Tesseract system binary separately and make it available on PATH. Installing the Python package alone is not sufficient.
+- The unified `ingest_any_bytes` entry point routes Phase 1 and Phase 2 file types. These functions do not write to MARG or any third-party app.
+- Scanned PDF page rasterization, AI-assisted field mapping, durable review queue, and MARG browser/API/import integration remain future phases. Do not enable live writes until the real MARG UI and supported integration method are verified.
+
 ## Purpose
 Extend FDIA into a reliable, auditable agent for turning business documents and unstructured input into validated records for MARG ERP Online and other explicitly configured business applications.
 
