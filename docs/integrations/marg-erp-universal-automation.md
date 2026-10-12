@@ -1,6 +1,17 @@
 # MARG ERP and Universal Automation Agent
 
 
+
+## Phase 3: extraction review queue and adapter safety
+
+- `packages/review/workflow.py` maps known aliases for customer, supplier, invoice, model, IMEI, amount, payment, finance company and GST fields.
+- `packages/services/review_pipeline.py` converts CSV/XLSX rows or labelled key/value text into review records. Unknown columns are retained in an unmapped-field list; arbitrary prose is not guessed into fields.
+- `ReviewQueue` stores records in local SQLite, blocks duplicate source/workflow rows, requires reviewer identity, and prevents approval when deterministic validation errors remain.
+- `packages/adapters/base.py` defines a narrow adapter contract and a mock adapter. MARG and generic third-party live adapter requests fail closed.
+- API routes are available for pasted-text ingestion, listing review records, approving/rejecting records, dry-run preview, and mock submission. Start the API and open `/docs` to inspect them.
+- Set `FDIA_REVIEW_DB` to choose the local SQLite database path. The default is `data/fdia_review_queue.sqlite3`.
+- Automated tests now include review queue, pipeline and API tests. A green GitHub Actions result must still be observed before claiming the suite passes.
+
 ## Current implementation status
 
 - Phase 1: deterministic intake for pasted text, TXT/MD/LOG, CSV, XLSX/XLSM, and text-based PDF; validation and dry-run preview only.
