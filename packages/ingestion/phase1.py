@@ -32,7 +32,6 @@ class IngestedDocument:
     warnings: list[str] = field(default_factory=list)
     extracted_at: str = field(default_factory=lambda: datetime.now(timezone.utc).isoformat())
     confidence: float | None = None
-    confidence: float | None = None
 
 
 MAX_FILE_BYTES = 25 * 1024 * 1024
