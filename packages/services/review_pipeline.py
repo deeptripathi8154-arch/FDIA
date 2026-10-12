@@ -1,6 +1,7 @@
 """Connect ingested documents to normalized records and the local review queue."""
 from __future__ import annotations
 
+import hashlib
 import re
 from typing import Any
 
@@ -32,10 +33,12 @@ def enqueue_document(document: IngestedDocument, workflow: str, queue: ReviewQue
         raise ValueError("No structured rows or labelled key/value fields found; manual mapping is required.")
 
     queued: list[ReviewRecord] = []
-    for source in source_records:
+    for index, source in enumerate(source_records):
+        # Stable row-level keys keep records distinct and block repeated imports.
+        row_hash = hashlib.sha256(f"{document.source_sha256}:{index}".encode()).hexdigest()
         record = build_review_record(
             source_name=document.source_name,
-            source_sha256=document.source_sha256,
+            source_sha256=row_hash,
             source=source,
             workflow=workflow,
             confidence=document.confidence,
