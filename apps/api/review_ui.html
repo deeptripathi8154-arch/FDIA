@@ -1,0 +1,96 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>FDIA · Review Desk</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121c2d;--line:#26364e;--text:#eaf1fb;--muted:#9cafc7;--accent:#66d9c1;--warn:#f4c879;--bad:#ff9a9a}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(ellipse at top left,#172a40 0,#0b1220 58%);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1180px;margin:0 auto;padding:28px 18px 60px}.top{display:flex;justify-content:space-between;align-items:center;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+h1{font-size:clamp(25px,4vw,36px);margin:0;letter-spacing:-.04em}.sub{color:var(--muted);margin:5px 0 0}.pill{border:1px solid #326c66;color:var(--accent);border-radius:999px;padding:6px 12px;font-size:12px;letter-spacing:.06em}
+.layout{display:grid;grid-template-columns:minmax(280px,.85fr) minmax(0,1.4fr);gap:18px}.panel{background:linear-gradient(150deg,rgba(22,35,54,.97),rgba(15,25,40,.97));border:1px solid var(--line);border-radius:18px;padding:20px;box-shadow:0 18px 45px #0002;min-width:0}
+h2{font-size:17px;margin:0 0 14px}label{display:block;color:var(--muted);font-size:13px;margin:13px 0 6px}
+input,select,textarea{width:100%;background:#0b1422;border:1px solid #30435c;border-radius:10px;padding:11px 12px;color:var(--text);font:inherit}
+textarea{min-height:150px;resize:vertical}button{border:1px solid #39516d;border-radius:10px;padding:9px 12px;background:#1c2d43;color:var(--text);font:inherit;font-weight:600;cursor:pointer}
+button.primary{background:var(--accent);border-color:var(--accent);color:#08221f}button.danger{color:var(--bad)}button:disabled{opacity:.5;cursor:not-allowed}
+.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px}.note{font-size:12px;color:var(--muted);margin-top:12px}.status{padding:10px 12px;border-radius:10px;background:#0a1421;border:1px solid var(--line);color:var(--muted);margin:12px 0;white-space:pre-wrap}
+.toolbar{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin-bottom:14px}.toolbar select{width:auto;min-width:160px}.records{display:grid;gap:10px}
+.record{border:1px solid var(--line);border-radius:13px;background:#0d1726;padding:14px}.record-head{display:flex;justify-content:space-between;gap:10px;align-items:start}.record h3{font-size:15px;margin:0;overflow-wrap:anywhere}.meta{font-size:12px;color:var(--muted);margin-top:4px}.state{font-size:11px;border:1px solid #425a75;border-radius:999px;padding:3px 8px;white-space:nowrap}.state.pending_review{color:var(--warn)}.state.approved{color:var(--accent)}.state.rejected{color:var(--bad)}
+pre{white-space:pre-wrap;overflow-wrap:anywhere;font-size:12px;background:#080f1a;border-radius:9px;padding:10px;color:#c9d7e9;max-height:240px;overflow:auto}.empty{color:var(--muted);padding:25px 8px;text-align:center}.foot{margin-top:18px;color:var(--muted);font-size:12px}
+@media(max-width:800px){.layout{grid-template-columns:1fr}.panel{padding:16px}}
+</style>
+</head>
+<body><main>
+<header class="top"><div><h1>FDIA Review Desk</h1><p class="sub">Document intake · field review · controlled mock workflow</p></div><span class="pill">LOCAL REVIEW · NO ERP WRITES</span></header>
+<div class="layout">
+<section class="panel">
+<h2>01 · Add source</h2>
+<label for="workflow">Business workflow</label>
+<select id="workflow"><option value="sales">Sales</option><option value="purchase">Purchase</option><option value="inventory">Inventory</option><option value="finance">Finance</option><option value="customer">Customer</option></select>
+<label for="file">Upload a supported file (max 25 MB)</label><input id="file" type="file" accept=".txt,.text,.md,.log,.csv,.xlsx,.xlsm,.pdf,.docx,.png,.jpg,.jpeg,.tif,.tiff,.bmp,.webp">
+<div class="actions"><button class="primary" id="upload">Upload & extract</button></div>
+<div class="note">PDF must contain embedded text; image OCR requires the Tesseract system binary. Scanned-PDF OCR is not enabled yet.</div>
+<label for="pasted">Or paste labelled fields</label><textarea id="pasted" placeholder="Customer: Asha&#10;Model: Phone&#10;Amount: 12000"></textarea>
+<div class="actions"><button id="paste" class="primary">Queue pasted text</button><button id="refresh">Refresh queue</button></div>
+<div id="notice" class="status" role="status" aria-live="polite">Ready. Imported records remain pending until a reviewer decides.</div>
+</section>
+<section class="panel">
+<div class="toolbar"><h2 style="margin:0;flex:1">02 · Review queue</h2><select id="filter" aria-label="Filter status"><option value="pending_review">Pending review</option><option value="approved">Approved</option><option value="rejected">Rejected</option><option value="">All records</option></select><button id="reload">Load</button></div>
+<div id="records" class="records"><div class="empty">Loading review records…</div></div>
+<p class="foot">Approvals only move a record into the local approved state. “Mock submit” is simulated and does not create or change anything in MARG ERP or another application.</p>
+</section></div></main>
+<script>
+const $ = id => document.getElementById(id);
+const notice = message => { $('notice').textContent = message; };
+const jsonFetch = async (url, options={}) => {
+  const response = await fetch(url, options);
+  let body = {};
+  try { body = await response.json(); } catch {}
+  if (!response.ok) throw new Error(typeof body.detail === 'string' ? body.detail : 'Request failed ('+response.status+')');
+  return body;
+};
+const button = (label, action, extra='') => {
+  const el = document.createElement('button'); el.textContent = label; if(extra) el.className=extra;
+  el.addEventListener('click', action); return el;
+};
+async function loadRecords(){
+  const status = $('filter').value;
+  const query = status ? '?status='+encodeURIComponent(status) : '?status=';
+  const target = $('records'); target.replaceChildren();
+  try{
+    const data = await jsonFetch('/api/v1/review/records'+query);
+    if(!data.records.length){const empty=document.createElement('div');empty.className='empty';empty.textContent='No records in this view.';target.append(empty);return;}
+    for(const record of data.records){
+      const card=document.createElement('article');card.className='record';
+      const head=document.createElement('div');head.className='record-head';
+      const title=document.createElement('div');const h=document.createElement('h3');h.textContent=record.source_name+' · '+record.workflow;title.append(h);
+      const meta=document.createElement('div');meta.className='meta';meta.textContent='ID '+record.id+' · '+(record.created_at||'');title.append(meta);
+      const state=document.createElement('span');state.className='state '+record.status;state.textContent=record.status;head.append(title,state);card.append(head);
+      const details=document.createElement('pre');details.textContent=JSON.stringify({fields:record.fields,errors:record.errors,warnings:record.warnings,unmapped_fields:record.unmapped_fields,confidence:record.confidence},null,2);card.append(details);
+      const actions=document.createElement('div');actions.className='actions';
+      actions.append(button('Preview',async()=>{try{const out=await jsonFetch('/api/v1/review/records/'+record.id+'/preview',{method:'POST'});notice('Dry-run preview only:\n'+JSON.stringify(out,null,2));}catch(e){notice(e.message);}}));
+      if(record.status==='pending_review'){
+        actions.append(button('Approve',async()=>{const reviewer=prompt('Reviewer identifier (required):');if(!reviewer)return;try{await jsonFetch('/api/v1/review/records/'+record.id+'/decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewer,decision:'approve'})});notice('Record approved in local queue.');await loadRecords();}catch(e){notice(e.message);}},'primary'));
+        actions.append(button('Reject',async()=>{const reviewer=prompt('Reviewer identifier (required):');if(!reviewer)return;try{await jsonFetch('/api/v1/review/records/'+record.id+'/decision',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({reviewer,decision:'reject'})});notice('Record rejected in local queue.');await loadRecords();}catch(e){notice(e.message);}},'danger'));
+      }
+      if(record.status==='approved') actions.append(button('Mock submit',async()=>{try{const out=await jsonFetch('/api/v1/review/records/'+record.id+'/mock-submit',{method:'POST'});notice('MOCK ONLY — no ERP write:\n'+JSON.stringify(out,null,2));}catch(e){notice(e.message);}}));
+      card.append(actions);target.append(card);
+    }
+  }catch(e){target.textContent='Could not load records: '+e.message;}
+}
+$('upload').addEventListener('click',async()=>{
+  const file=$('file').files[0];if(!file){notice('Choose a file first.');return;}
+  const form=new FormData();form.append('file',file);form.append('workflow',$('workflow').value);
+  $('upload').disabled=true;
+  try{const result=await jsonFetch('/api/v1/review/ingest-file',{method:'POST',body:form});notice('Queued '+result.queued+' record(s) from '+result.source_name+'.\nWarnings: '+(result.warnings||[]).join('; '));$('file').value='';$('filter').value='pending_review';await loadRecords();}
+  catch(e){notice('Upload failed: '+e.message);}finally{$('upload').disabled=false;}
+});
+$('paste').addEventListener('click',async()=>{
+  const text=$('pasted').value;if(!text.trim()){notice('Paste labelled key/value fields first.');return;}
+  try{const result=await jsonFetch('/api/v1/review/ingest-text',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({filename:'clipboard.txt',workflow:$('workflow').value,text})});notice('Queued '+result.queued+' record(s).');$('pasted').value='';$('filter').value='pending_review';await loadRecords();}
+  catch(e){notice('Could not queue text: '+e.message);}
+});
+$('refresh').addEventListener('click',loadRecords);$('reload').addEventListener('click',loadRecords);$('filter').addEventListener('change',loadRecords);
+loadRecords();
+</script></body></html>
