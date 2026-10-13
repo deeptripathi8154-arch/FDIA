@@ -1,12 +1,21 @@
 """FastAPI application entry point."""
 
 from contextlib import asynccontextmanager
+from dataclasses import asdict
+import os
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from packages.config import get_settings
 from packages.logging import get_logger
+from packages.adapters.base import MockAdapter
+from packages.ingestion.phase1 import IngestionError, MAX_FILE_BYTES, ingest_bytes
+from packages.ingestion.phase2 import ingest_any_bytes
+from packages.review.workflow import ReviewQueue
+from packages.services.review_pipeline import enqueue_document
 
 logger = get_logger(__name__)
 
@@ -39,11 +48,108 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
+    @app.get("/review", include_in_schema=False)
+    async def review_desk() -> FileResponse:
+        """Serve the local operator review desk."""
+        return FileResponse(Path(__file__).with_name("review_ui.html"), media_type="text/html")
+
     # Health check
     @app.get("/health", tags=["Health"])
     async def health_check() -> dict:
         """Health check endpoint."""
         return {"status": "ok", "version": settings.app_version}
+
+
+    def review_queue() -> ReviewQueue:
+        return ReviewQueue(os.getenv("FDIA_REVIEW_DB", "data/fdia_review_queue.sqlite3"))
+
+    @app.post("/api/v1/review/ingest-text", tags=["Review"])
+    async def ingest_text_for_review(payload: dict) -> dict:
+        """Ingest pasted text into the human-review queue; never writes to an ERP."""
+        filename = str(payload.get("filename", "clipboard.txt"))
+        content = payload.get("text")
+        workflow = str(payload.get("workflow", "sales"))
+        if not isinstance(content, str) or not content.strip():
+            raise HTTPException(status_code=422, detail="A non-empty text field is required.")
+        try:
+            document = ingest_bytes(filename, content.encode("utf-8"), pasted_text=True)
+            records = enqueue_document(document, workflow, review_queue())
+        except (ValueError, IngestionError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"source_sha256": document.source_sha256, "queued": len(records),
+                "records": [asdict(record) for record in records]}
+
+    @app.post("/api/v1/review/ingest-file", tags=["Review"])
+    async def ingest_file_for_review(
+        file: UploadFile = File(...),
+        workflow: str = Form("sales"),
+    ) -> dict:
+        """Parse an uploaded supported file into human review; never writes to an ERP."""
+        filename = file.filename or "uploaded-file"
+        try:
+            content = await file.read(MAX_FILE_BYTES + 1)
+            if len(content) > MAX_FILE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File exceeds the {MAX_FILE_BYTES // (1024 * 1024)} MB limit.",
+                )
+            document = ingest_any_bytes(filename, content)
+            records = enqueue_document(document, workflow, review_queue())
+        except HTTPException:
+            raise
+        except (ValueError, IngestionError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        finally:
+            await file.close()
+        return {
+            "source_sha256": document.source_sha256,
+            "source_name": document.source_name,
+            "source_type": document.source_type,
+            "confidence": document.confidence,
+            "warnings": document.warnings,
+            "queued": len(records),
+            "records": [asdict(record) for record in records],
+        }
+
+    @app.get("/api/v1/review/records", tags=["Review"])
+    async def list_review_records(status: str = "pending_review") -> dict:
+        try:
+            records = review_queue().list_records(status=(status or None))
+        except ValueError as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        return {"records": [asdict(record) for record in records], "total": len(records)}
+
+    @app.post("/api/v1/review/records/{record_id}/decision", tags=["Review"])
+    async def decide_review_record(record_id: str, payload: dict) -> dict:
+        reviewer = str(payload.get("reviewer", "")).strip()
+        decision = payload.get("decision")
+        if decision not in {"approve", "reject"}:
+            raise HTTPException(status_code=422, detail="decision must be 'approve' or 'reject'.")
+        try:
+            record = review_queue().review(record_id, reviewer, approve=(decision == "approve"))
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Review record not found.") from exc
+        except ValueError as exc:
+            raise HTTPException(status_code=409, detail=str(exc)) from exc
+        return asdict(record)
+
+    @app.post("/api/v1/review/records/{record_id}/preview", tags=["Adapters"])
+    async def preview_record(record_id: str) -> dict:
+        """Build a mock adapter preview only; no external application is modified."""
+        try:
+            record = review_queue().get(record_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Review record not found.") from exc
+        return asdict(MockAdapter().preview(record))
+
+    @app.post("/api/v1/review/records/{record_id}/mock-submit", tags=["Adapters"])
+    async def mock_submit_record(record_id: str) -> dict:
+        """Simulate a submission after approval; this is not a live ERP write."""
+        try:
+            record = review_queue().get(record_id)
+        except KeyError as exc:
+            raise HTTPException(status_code=404, detail="Review record not found.") from exc
+        return asdict(MockAdapter().submit(record))
 
     # API Routes (TODO: Add more endpoints)
     @app.get("/api/v1/documents", tags=["Documents"])
