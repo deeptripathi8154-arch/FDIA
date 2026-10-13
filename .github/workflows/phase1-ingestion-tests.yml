@@ -16,6 +16,6 @@ jobs:
           python-version: "3.11"
           cache: pip
       - name: Install Phase 1 test dependencies
-        run: python -m pip install --upgrade pip pytest pytest-asyncio pytest-cov httpx fastapi pydantic-settings loguru openpyxl pypdf python-docx pytesseract pillow python-multipart
+        run: python -m pip install --upgrade pip pytest pytest-asyncio pytest-cov httpx fastapi pydantic-settings loguru sqlalchemy openpyxl pypdf python-docx pytesseract pillow python-multipart
       - name: Run ingestion tests
         run: python -m pytest tests/unit/test_ingestion_phase1.py tests/unit/test_ingestion_phase2.py tests/unit/test_review_workflow.py tests/unit/test_review_pipeline.py tests/unit/test_review_api.py -q
