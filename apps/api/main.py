@@ -3,8 +3,10 @@
 from contextlib import asynccontextmanager
 from dataclasses import asdict
 import os
+from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 from packages.config import get_settings
@@ -45,6 +47,11 @@ def create_app() -> FastAPI:
         allow_methods=["*"],
         allow_headers=["*"],
     )
+
+    @app.get("/review", include_in_schema=False)
+    async def review_desk() -> FileResponse:
+        """Serve the local operator review desk."""
+        return FileResponse(Path(__file__).with_name("review_ui.html"), media_type="text/html")
 
     # Health check
     @app.get("/health", tags=["Health"])
@@ -107,7 +114,7 @@ def create_app() -> FastAPI:
     @app.get("/api/v1/review/records", tags=["Review"])
     async def list_review_records(status: str = "pending_review") -> dict:
         try:
-            records = review_queue().list_records(status=status)
+            records = review_queue().list_records(status=(status or None))
         except ValueError as exc:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"records": [asdict(record) for record in records], "total": len(records)}
