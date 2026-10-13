@@ -63,3 +63,12 @@ def test_review_api_upload_rejects_unsupported_file(tmp_path, monkeypatch):
         files={"file": ("sales.exe", b"not an allowed file", "application/octet-stream")},
     )
     assert response.status_code == 422
+
+
+
+def test_review_desk_is_served():
+    client = TestClient(app)
+    response = client.get("/review")
+    assert response.status_code == 200
+    assert "FDIA Review Desk" in response.text
+    assert "/api/v1/review/ingest-file" in response.text
