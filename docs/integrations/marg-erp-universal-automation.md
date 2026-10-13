@@ -8,7 +8,7 @@
 - `packages/services/review_pipeline.py` converts CSV/XLSX rows or labelled key/value text into review records. Unknown columns are retained in an unmapped-field list; arbitrary prose is not guessed into fields.
 - `ReviewQueue` stores records in local SQLite, blocks duplicate source/workflow rows, requires reviewer identity, and prevents approval when deterministic validation errors remain.
 - `packages/adapters/base.py` defines a narrow adapter contract and a mock adapter. MARG and generic third-party live adapter requests fail closed.
-- API routes are available for pasted-text ingestion, listing review records, approving/rejecting records, dry-run preview, and mock submission. Start the API and open `/docs` to inspect them.
+- API routes are available for pasted-text and multipart file ingestion, listing review records, approving/rejecting records, dry-run preview, and mock submission. Supported uploads include TXT/MD/LOG, CSV, XLSX/XLSM, text-based PDF, DOCX, and images when Tesseract is installed. Start the API and open `/docs` to inspect them. Uploads are limited to 25 MB and enter human review; no endpoint writes to MARG.
 - Set `FDIA_REVIEW_DB` to choose the local SQLite database path. The default is `data/fdia_review_queue.sqlite3`.
 - Automated tests now include review queue, pipeline and API tests. A green GitHub Actions result must still be observed before claiming the suite passes.
 
@@ -18,7 +18,7 @@
 - Phase 2: DOCX paragraph/table extraction and image OCR through Pillow + pytesseract/Tesseract. OCR output carries an average confidence score and a warning below 80%; uncertain values require human review.
 - OCR prerequisite: install the Tesseract system binary separately and make it available on PATH. Installing the Python package alone is not sufficient.
 - The unified `ingest_any_bytes` entry point routes Phase 1 and Phase 2 file types. These functions do not write to MARG or any third-party app.
-- Scanned PDF page rasterization, AI-assisted field mapping, durable review queue, and MARG browser/API/import integration remain future phases. Do not enable live writes until the real MARG UI and supported integration method are verified.
+- Scanned PDF page rasterization and AI-assisted field mapping remain future phases. The local SQLite review queue and review API are implemented; MARG browser/API/import integration remains unimplemented. Do not enable live writes until the real MARG UI and supported integration method are verified.
 
 ## Purpose
 Extend FDIA into a reliable, auditable agent for turning business documents and unstructured input into validated records for MARG ERP Online and other explicitly configured business applications.
@@ -71,13 +71,13 @@ Failure states: REJECTED, DUPLICATE, SUBMISSION_UNKNOWN, FAILED.
 
 ## Phased implementation
 ### Phase 1 — Intake and validation
-Upload/paste intake, PDF/XLSX/CSV/TXT parsing, canonical schema, validation, dry-run preview, audit log, and CSV/XLSX reconciliation.
+Implemented deterministic file/paste intake, supported parsers, canonical field mapping, validation, local review queue, and dry-run/mock preview. Automated CI still needs a confirmed green result. Reconciliation exports and richer source evidence remain to be completed.
 
 ### Phase 2 — OCR and AI extraction
 Scanned PDFs/images, DOCX, schema-constrained extraction, confidence scoring, and review queue.
 
 ### Phase 3 — Safe execution framework
-Mock adapter, idempotency, checkpoints, bounded retries, read-back verification, and integration tests.
+Implemented mock adapter and explicit human approval gate. Durable execution checkpoints, bounded retries, timeout reconciliation, read-back verification, and broader integration tests remain outstanding.
 
 ### Phase 4 — MARG adapter
 Confirm edition/version, modules, supported API or import template, required fields, tax rules, numbering behavior, and authorized test environment. Build and test only against confirmed interfaces.
