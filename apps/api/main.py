@@ -4,13 +4,14 @@ from contextlib import asynccontextmanager
 from dataclasses import asdict
 import os
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, Form, HTTPException, UploadFile
 from fastapi.middleware.cors import CORSMiddleware
 
 from packages.config import get_settings
 from packages.logging import get_logger
 from packages.adapters.base import MockAdapter
-from packages.ingestion.phase1 import IngestionError, ingest_bytes
+from packages.ingestion.phase1 import IngestionError, MAX_FILE_BYTES, ingest_bytes
+from packages.ingestion.phase2 import ingest_any_bytes
 from packages.review.workflow import ReviewQueue
 from packages.services.review_pipeline import enqueue_document
 
@@ -70,6 +71,38 @@ def create_app() -> FastAPI:
             raise HTTPException(status_code=422, detail=str(exc)) from exc
         return {"source_sha256": document.source_sha256, "queued": len(records),
                 "records": [asdict(record) for record in records]}
+
+    @app.post("/api/v1/review/ingest-file", tags=["Review"])
+    async def ingest_file_for_review(
+        file: UploadFile = File(...),
+        workflow: str = Form("sales"),
+    ) -> dict:
+        """Parse an uploaded supported file into human review; never writes to an ERP."""
+        filename = file.filename or "uploaded-file"
+        try:
+            content = await file.read(MAX_FILE_BYTES + 1)
+            if len(content) > MAX_FILE_BYTES:
+                raise HTTPException(
+                    status_code=413,
+                    detail=f"File exceeds the {MAX_FILE_BYTES // (1024 * 1024)} MB limit.",
+                )
+            document = ingest_any_bytes(filename, content)
+            records = enqueue_document(document, workflow, review_queue())
+        except HTTPException:
+            raise
+        except (ValueError, IngestionError) as exc:
+            raise HTTPException(status_code=422, detail=str(exc)) from exc
+        finally:
+            await file.close()
+        return {
+            "source_sha256": document.source_sha256,
+            "source_name": document.source_name,
+            "source_type": document.source_type,
+            "confidence": document.confidence,
+            "warnings": document.warnings,
+            "queued": len(records),
+            "records": [asdict(record) for record in records],
+        }
 
     @app.get("/api/v1/review/records", tags=["Review"])
     async def list_review_records(status: str = "pending_review") -> dict:
