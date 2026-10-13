@@ -8,7 +8,7 @@
 - `packages/services/review_pipeline.py` converts CSV/XLSX rows or labelled key/value text into review records. Unknown columns are retained in an unmapped-field list; arbitrary prose is not guessed into fields.
 - `ReviewQueue` stores records in local SQLite, blocks duplicate source/workflow rows, requires reviewer identity, and prevents approval when deterministic validation errors remain.
 - `packages/adapters/base.py` defines a narrow adapter contract and a mock adapter. MARG and generic third-party live adapter requests fail closed.
-- API routes are available for pasted-text and multipart file ingestion, listing review records, approving/rejecting records, dry-run preview, and mock submission. Supported uploads include TXT/MD/LOG, CSV, XLSX/XLSM, text-based PDF, DOCX, and images when Tesseract is installed. Start the API and open `/docs` to inspect them. Uploads are limited to 25 MB and enter human review; no endpoint writes to MARG.
+- A local operator review desk is served at `/review`. API routes are available for pasted-text and multipart file ingestion, listing review records, approving/rejecting records, dry-run preview, and mock submission. Supported uploads include TXT/MD/LOG, CSV, XLSX/XLSM, text-based PDF, DOCX, and images when Tesseract is installed. Start the API and open `/review` for the operator review desk or `/docs` for the API reference. Uploads are limited to 25 MB and enter human review; no endpoint writes to MARG.
 - Set `FDIA_REVIEW_DB` to choose the local SQLite database path. The default is `data/fdia_review_queue.sqlite3`.
 - Automated tests now include review queue, pipeline and API tests. A green GitHub Actions result must still be observed before claiming the suite passes.
 
